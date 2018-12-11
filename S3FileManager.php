@@ -16,6 +16,7 @@ class S3FileManager extends \yii\base\Component
 		$localProfile,
 		$temporaryFileLocation,
 
+		$client,
 		$baseRoute;
 	/**
 	 * Create the Postmark client. bucketName, environment, temporaryFileLocation, and localProfile must have been set in the config of the component. region is optional with the default of 'eu-west-1'
