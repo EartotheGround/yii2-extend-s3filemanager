@@ -10,16 +10,11 @@ return [
 	'language' => 'en-GB',
 	'sourceLanguage' => 'en-GB',
 	'timeZone' => 'UTC',
-	'vendorPath' => dirname(dirname(__DIR__)) . '/vendor',
-	'bootstrap' => ['log'],
-	'aliases' => [
-        '@bower' => '@vendor/bower-asset',
-        '@npm'   => '@vendor/npm-asset',
-    ],
+	...,
 	'components' => [
-	    'db' => [
-	    	...
-	    ],
+		'db' => [
+			...
+		],
 		's3filemanager' => [
 			'class' => 'human\yii2-s3filemanager\PostmarkMailer',
 			'bucketName' => '[name of the S3 bucket]',

@@ -2,6 +2,9 @@
 
 namespace Human\Yii2ExtendS3FileManager;
 
+use yii\base\InvalidConfigException;
+use yii\web\ServerErrorHttpException;
+use yii\web\NotFoundHttpException;
 use Aws\S3\S3Client;
 
 class S3FileManager extends \yii\base\Component
@@ -11,10 +14,11 @@ class S3FileManager extends \yii\base\Component
 		$region = 'eu-west-1',
 		$environment,
 		$localProfile,
+		$temporaryFileLocation,
 
 		$baseRoute;
 	/**
-	 * Create the Postmark client. bucketName, environment, and localProfile must have been set in the config of the component. region is optional with the default of 'eu-west-1'
+	 * Create the Postmark client. bucketName, environment, temporaryFileLocation, and localProfile must have been set in the config of the component. region is optional with the default of 'eu-west-1'
 	 *
 	 * @return $this
 	 */
@@ -34,13 +38,17 @@ class S3FileManager extends \yii\base\Component
 			throw new InvalidConfigException('environment must be set');
 		}
 
+		if (!isset($this->temporaryFileLocation)) {
+			throw new InvalidConfigException('temporaryFileLocation must be set');
+		}
+
 		$this->environment = strtolower($this->environment);
 
 		$this->baseRoute = $this->environment.'/';
 
-		$params =[
-			'version'     => 'latest',
-			'region'      => $this->region,
+		$params = [
+			'version' => 'latest',
+			'region' => $this->region,
 		];
 		
 		// For local development, use a profile from your ~/.aws/credentials file
@@ -92,6 +100,16 @@ class S3FileManager extends \yii\base\Component
 	}
 
 	/**
+	 * Allow $this->temporaryFileLocation to be set in the config of the component.
+	 *
+	 * @param string $value The location to save files in temporarily before being used by the app.
+	 */
+	public function setTemporaryFileLocation($value)
+	{
+		$this->temporaryFileLocation = $value;
+	}
+
+	/**
 	 * Allow $this->localProfile to be set in the config of the component.
 	 *
 	 * @param string $value The name of the profile from your ~/.aws/credentials file for local development.
@@ -101,22 +119,34 @@ class S3FileManager extends \yii\base\Component
 		$this->localProfile = $value;
 	}
 
-	public function upload($s3FilePath, $currentFilePath)
+	/**
+	 * Upload a file.
+	 *
+	 * @param string $s3FilePath The bucket path name to upload the file as.
+	 * @param string $localFilePath The path to the local file to upload.
+	 * @return string $url The URL of the file, or false if the upload was unsuccessful.
+	 */
+	public function upload($s3FilePath, $localFilePath)
 	{
-		if (file_get_contents($currentFilePath) === false) {
-			throw new HttpException(500,"Failed to read file " . $currentFilePath);
+		$s3FilePath = $this->baseRoute.$s3FilePath;
+
+		if (file_get_contents($localFilePath) === false) {
+			throw new ServerErrorHttpException("Failed to read file ".$localFilePath);
 		}
 		
-		// Prepend the key with the basePath to namespace by environment
 		$s3FilePath = $this->baseRoute.$s3FilePath;
+
+		if ($this->fileExists($s3FilePath)) {
+			return false;
+		}
 
 		try {
 			$result = $this->client->putObject([
 				'ACL' 			=> 'public-read',
-				'Bucket' 		=> self::BUCKET_NAME,
+				'Bucket' 		=> $this->bucketName,
 				'Key'    		=> $s3FilePath,
-				'SourceFile'	=> $currentFilePath,
-				'ContentType'	=> mime_content_type($currentFilePath),
+				'SourceFile'	=> $localFilePath,
+				'ContentType'	=> mime_content_type($localFilePath),
 			]);
 
 		} catch (S3Exception $e) {
@@ -127,5 +157,114 @@ class S3FileManager extends \yii\base\Component
 		}
 
 		return $result['ObjectURL'];
+	}
+
+	/**
+	 * Move or rename a file.
+	 *
+	 * @param string $s3FilePath The current bucket path name of the file.
+	 * @param string $newFilePath The new bucket path name of the file.
+	 * @return string $url The URL of the file, or false if the move was unsuccessful.
+	 */
+	public function move($s3FilePath, $newFilePath)
+	{
+		$s3FilePath = $this->baseRoute.$s3FilePath;
+		$newFilePath = $this->baseRoute.$newFilePath;
+
+		if (!$this->fileExists($s3FilePath)) {
+			throw new NotFoundHttpException("Current file does not exist");
+		}
+
+		try {
+
+			$result = $this->client->copyObject([
+				'Bucket' 		=> $this->bucketName,
+				'Key'    		=> $newFilePath,
+				'CopySource'	=> $this->bucketName.'/'.$s3FilePath,
+			]);
+
+			$this->delete($s3FilePath);
+
+		} catch (S3Exception $e) {
+			return false;
+
+		} catch (\Exception $e) {
+			return false;
+		}
+		
+		return $result['ObjectURL'];
+	}
+
+	/**
+	 * Delete a file. If the file does not exist it returns true.
+	 *
+	 * @param string $s3FilePath The bucket path name of the file to delete.
+	 * @return bool $url Whether deletion was successful.
+	 */
+	public function delete($s3FilePath)
+	{
+		$s3FilePath = $this->baseRoute.$s3FilePath;
+
+		if (!$this->fileExists($s3FilePath)) {
+			return true;
+		}
+
+		try {
+
+			$result = $this->client->deleteObject([
+				'Bucket' 		=> $this->bucketName,
+				'Key'    		=> $s3FilePath,
+			]);
+
+		} catch (S3Exception $e) {
+			return false;
+
+		} catch (\Exception $e) {
+			return false;
+		}
+
+		return $result['DeleteMarker'];
+	}
+
+	/**
+	 * Download a file
+	 *
+	 * @param string $s3FilePath The current bucket path name of the file.
+	 * @param string $newFilePath The new bucket path name of the file.
+	 * @return string $url The URL of the file, or false if the move was unsuccessful.
+	 */
+	public function download($s3FilePath, $name)
+	{
+		try {
+			$result = $this->client->getObject([
+				'Bucket'	=> $this->bucketName,
+				'Key'		=> $s3FilePath,
+			]);
+
+		} catch (S3Exception $e) {
+			return false;
+
+		} catch (\Exception $e) {
+			return false;
+		}
+
+		$tempFilePath = $this->temporaryFileLocation.$name;
+		file_put_contents($tempFilePath, $result['Body']);
+		return $tempFilePath;
+	}
+
+	private function fileExists($s3FilePath)
+	{
+		try {
+			$result = $this->client->doesObjectExist($this->bucketName, $s3FilePath, []);
+
+		} catch (S3Exception $e) {
+			return false;
+
+		} catch (\Exception $e) {
+			return false;
+		}
+
+		return $result;
 	}
 }
