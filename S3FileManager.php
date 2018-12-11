@@ -135,27 +135,19 @@ class S3FileManager extends \yii\base\Component
 			throw new ServerErrorHttpException("Failed to read file ".$localFilePath);
 		}
 		
-		$s3FilePath = $this->baseRoute.$s3FilePath;
+		$fullS3FilePath = $this->baseRoute.$s3FilePath;
 
-		if ($this->fileExists($s3FilePath)) {
-			return false;
+		if ($this->fileExists($fullS3FilePath)) {
+			throw new ServerErrorHttpException("A file already exists with the path ".$s3FilePath);
 		}
 
-		try {
-			$result = $this->client->putObject([
-				'ACL' 			=> 'public-read',
-				'Bucket' 		=> $this->bucketName,
-				'Key'    		=> $s3FilePath,
-				'SourceFile'	=> $localFilePath,
-				'ContentType'	=> mime_content_type($localFilePath),
-			]);
-
-		} catch (S3Exception $e) {
-			return false;
-
-		} catch (\Exception $e) {
-			return false;
-		}
+		$result = $this->client->putObject([
+			'ACL' 			=> 'public-read',
+			'Bucket' 		=> $this->bucketName,
+			'Key'    		=> $fullS3FilePath,
+			'SourceFile'	=> $localFilePath,
+			'ContentType'	=> mime_content_type($localFilePath),
+		]);
 
 		return $result['ObjectURL'];
 	}
@@ -169,30 +161,21 @@ class S3FileManager extends \yii\base\Component
 	 */
 	public function move($s3FilePath, $newFilePath)
 	{
-		$s3FilePath = $this->baseRoute.$s3FilePath;
+		$fullS3FilePath = $this->baseRoute.$s3FilePath;
 		$newFilePath = $this->baseRoute.$newFilePath;
 
-		if (!$this->fileExists($s3FilePath)) {
-			throw new NotFoundHttpException("Current file does not exist");
+		if (!$this->fileExists($fullS3FilePath)) {
+			throw new NotFoundHttpException("Current file does not exist at ".$s3FilePath);
 		}
 
-		try {
+		$result = $this->client->copyObject([
+			'Bucket' 		=> $this->bucketName,
+			'Key'    		=> $newFilePath,
+			'CopySource'	=> $this->bucketName.'/'.$fullS3FilePath,
+		]);
 
-			$result = $this->client->copyObject([
-				'Bucket' 		=> $this->bucketName,
-				'Key'    		=> $newFilePath,
-				'CopySource'	=> $this->bucketName.'/'.$s3FilePath,
-			]);
-
-			$this->delete($s3FilePath);
-
-		} catch (S3Exception $e) {
-			return false;
-
-		} catch (\Exception $e) {
-			return false;
-		}
-		
+		$this->delete($fullS3FilePath);
+	
 		return $result['ObjectURL'];
 	}
 
@@ -204,25 +187,16 @@ class S3FileManager extends \yii\base\Component
 	 */
 	public function delete($s3FilePath)
 	{
-		$s3FilePath = $this->baseRoute.$s3FilePath;
+		$fullS3FilePath = $this->baseRoute.$s3FilePath;
 
-		if (!$this->fileExists($s3FilePath)) {
+		if (!$this->fileExists($fullS3FilePath)) {
 			return true;
 		}
 
-		try {
-
-			$result = $this->client->deleteObject([
-				'Bucket' 		=> $this->bucketName,
-				'Key'    		=> $s3FilePath,
-			]);
-
-		} catch (S3Exception $e) {
-			return false;
-
-		} catch (\Exception $e) {
-			return false;
-		}
+		$result = $this->client->deleteObject([
+			'Bucket' 		=> $this->bucketName,
+			'Key'    		=> $fullS3FilePath,
+		]);
 
 		return $result['DeleteMarker'];
 	}
@@ -236,36 +210,20 @@ class S3FileManager extends \yii\base\Component
 	 */
 	public function download($s3FilePath, $name)
 	{
-		try {
-			$result = $this->client->getObject([
-				'Bucket'	=> $this->bucketName,
-				'Key'		=> $s3FilePath,
-			]);
+		$fullS3FilePath = $this->baseRoute.$s3FilePath;
 
-		} catch (S3Exception $e) {
-			return false;
-
-		} catch (\Exception $e) {
-			return false;
-		}
+		$result = $this->client->getObject([
+			'Bucket'	=> $this->bucketName,
+			'Key'		=> $fullS3FilePath,
+		]);
 
 		$tempFilePath = $this->temporaryFileLocation.$name;
 		file_put_contents($tempFilePath, $result['Body']);
 		return $tempFilePath;
 	}
 
-	private function fileExists($s3FilePath)
+	private function fileExists($fullS3FilePath)
 	{
-		try {
-			$result = $this->client->doesObjectExist($this->bucketName, $s3FilePath, []);
-
-		} catch (S3Exception $e) {
-			return false;
-
-		} catch (\Exception $e) {
-			return false;
-		}
-
-		return $result;
+		return $this->client->doesObjectExist($this->bucketName, $fullS3FilePath, []);
 	}
 }
