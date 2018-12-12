@@ -15,11 +15,13 @@ class S3FileManager extends \yii\base\Component
 		$environment,
 		$localProfile,
 		$temporaryFileLocation,
+		$publicAccess = false,
 
 		$client,
 		$baseRoute;
+
 	/**
-	 * Create the Postmark client. bucketName, environment, temporaryFileLocation, and localProfile must have been set in the config of the component. region is optional with the default of 'eu-west-1'
+	 * Create the S3 client. `bucketName`, `environment`, `temporaryFileLocation`, and `localProfile` must have been set in the config of the component. `region` is optional with the default of 'eu-west-1' and `publicAccess` with the default false.
 	 *
 	 * @return $this
 	 */
@@ -121,6 +123,16 @@ class S3FileManager extends \yii\base\Component
 	}
 
 	/**
+	 * Allow $this->publicAccess to be set in the config of the component.
+	 *
+	 * @param bool $value Whether the files should be uploaded as publically accessible.
+	 */
+	public function setPublicAccess($value)
+	{
+		$this->publicAccess = $value;
+	}
+
+	/**
 	 * Upload a file.
 	 *
 	 * @param string $s3FilePath The bucket path name to upload the file as.
@@ -129,25 +141,28 @@ class S3FileManager extends \yii\base\Component
 	 */
 	public function upload($s3FilePath, $localFilePath)
 	{
-		$s3FilePath = $this->baseRoute.$s3FilePath;
+		$fullS3FilePath = $this->baseRoute.$s3FilePath;
 
 		if (file_get_contents($localFilePath) === false) {
 			throw new ServerErrorHttpException("Failed to read file ".$localFilePath);
 		}
 		
-		$fullS3FilePath = $this->baseRoute.$s3FilePath;
-
 		if ($this->fileExists($fullS3FilePath)) {
 			throw new ServerErrorHttpException("A file already exists with the path ".$s3FilePath);
 		}
 
-		$result = $this->client->putObject([
-			'ACL' 			=> 'public-read',
+		$settings = [
 			'Bucket' 		=> $this->bucketName,
 			'Key'    		=> $fullS3FilePath,
 			'SourceFile'	=> $localFilePath,
 			'ContentType'	=> mime_content_type($localFilePath),
-		]);
+		];
+
+		if ($this->publicAccess) {
+			$settings['ACL'] = 'public-read';
+		}
+
+		$result = $this->client->putObject($settings);
 
 		return $result['ObjectURL'];
 	}
