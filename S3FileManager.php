@@ -237,6 +237,32 @@ class S3FileManager extends \yii\base\Component
 		return $tempFilePath;
 	}
 
+	/**
+	 * Get a public temporary URL of a private file
+	 *
+	 * @param string $s3FilePath The current bucket path name of the file.
+	 * @return string $url The URL of the file.
+	 */
+	public function getSignedUrl($s3FilePath)
+	{
+		$fullS3FilePath = $this->baseRoute.$s3FilePath;
+
+		try {
+
+			$request = $this->client->getCommand('GetObject', [
+				'Bucket'	=> $this->bucketName,
+				'Key'		=> $fullS3FilePath,
+			]);
+
+			$result = $this->client->createPresignedRequest($request, '+10 minutes');
+
+		} catch (\Exception $e) {
+			return null;
+		}
+
+		return (string)$result->getUri();
+	}
+
 	private function fileExists($fullS3FilePath)
 	{
 		return $this->client->doesObjectExist($this->bucketName, $fullS3FilePath, []);
