@@ -2,6 +2,7 @@
 
 namespace Human\Yii2ExtendS3FileManager;
 
+use Yii;
 use yii\base\InvalidConfigException;
 use yii\web\ServerErrorHttpException;
 use yii\web\NotFoundHttpException;
@@ -105,11 +106,11 @@ class S3FileManager extends \yii\base\Component
 	/**
 	 * Allow $this->temporaryFileLocation to be set in the config of the component.
 	 *
-	 * @param string $value The location to save files in temporarily before being used by the app.
+	 * @param string $value The location to save files in temporarily before being used by the app (assumed to be an alias).
 	 */
 	public function setTemporaryFileLocation($value)
 	{
-		$this->temporaryFileLocation = $value;
+		$this->temporaryFileLocation = Yii::getAlias($value);
 	}
 
 	/**
