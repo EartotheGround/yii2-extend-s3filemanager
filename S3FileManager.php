@@ -1,6 +1,6 @@
 <?php
 
-namespace Human\Yii2ExtendS3FileManager;
+namespace eartotheground\Yii2ExtendS3FileManager;
 
 use Yii;
 use yii\base\InvalidConfigException;

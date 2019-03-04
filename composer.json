@@ -1,6 +1,6 @@
 {
-    "name": "human/yii2-extend-s3filemanager",
-    "description": "A Human Yii2 S3 File Manager component, with functionality to upload, edit, and delete files",
+    "name": "eartotheground/yii2-extend-s3filemanager",
+    "description": "A eartotheground Yii2 S3 File Manager component, with functionality to upload, edit, and delete files",
     "require": {
         "php": ">=5.4.0",
         "yiisoft/yii2": "^2.0",
@@ -9,13 +9,13 @@
     "license": "proprietary",
     "authors": [
         {
-            "name": "Human Software",
-            "email": "theteam@human.software",
-            "homepage": "https://human.software"
+            "name": "eartotheground Software",
+            "email": "theteam@eartotheground.software",
+            "homepage": "https://eartotheground.software"
         }
     ],
     "autoload": {
-        "psr-4": {"Human\\Yii2ExtendS3FileManager\\": ""}
+        "psr-4": {"eartotheground\\Yii2ExtendS3FileManager\\": ""}
     }
 
 }
